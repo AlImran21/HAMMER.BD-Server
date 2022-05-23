@@ -2,6 +2,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 const app = express();
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const port = process.env.PORT || 5000;
 
@@ -18,6 +19,21 @@ async function run() {
     try {
         await client.connect();
         const productsCollection = client.db('HAMMER').collection('products');
+        const userCollection = client.db('HAMMER').collection('users');
+
+
+        app.put('/user/:email', async (req, res) => {
+            const email = req.params.email;
+            const user = req.body;
+            const filter = { email: email };
+            const options = { upsert: true };
+            const updateDoc = {
+                $set: user,
+            };
+            const result = await userCollection.updateOne(filter, updateDoc, options);
+            res.send(result);
+        });
+
 
         app.get('/product', async (req, res) => {
             const query = {};
@@ -25,6 +41,7 @@ async function run() {
             const products = await cursor.toArray();
             res.send(products);
         });
+
 
         app.get('/product/:id', async (req, res) => {
             const id = req.params.id;
