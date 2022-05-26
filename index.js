@@ -4,6 +4,7 @@ const app = express();
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -43,6 +44,9 @@ async function run() {
         const userCollection = client.db('HAMMER').collection('users');
         const bookingCollection = client.db('HAMMER').collection('bookings');
         const addProductCollection = client.db('HAMMER').collection('addProducts');
+        const addReviewCollection = client.db('HAMMER').collection('addReviews');
+        const paymentCollection = client.db('HAMMER').collection('payments');
+        const updateProfileCollection = client.db('HAMMER').collection('updateProfiles');
 
 
         const verifyAdmin = async (req, res, next) => {
@@ -56,6 +60,20 @@ async function run() {
                 return res.status(403).send({ message: 'Forbidden access' });
             }
         }
+
+
+        app.post('/create-payment-intent', verifyJWT, async (req, res) => {
+            const service = req.body;
+            const price = service.price;
+            const amount = price * 100;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            });
+            res.send({ clientSecret: paymentIntent.client_secret });
+
+        });
 
 
         app.get('/user', verifyJWT, async (req, res) => {
@@ -131,6 +149,14 @@ async function run() {
         });
 
 
+        app.get('/booking/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: ObjectId(id) };
+            const booking = await bookingCollection.findOne(query);
+            res.send(booking);
+        });
+
+
         app.post('/booking', async (req, res) => {
             const booking = req.body;
             const query = { product: booking.product, date: booking.date, visitor: booking.visitor };
@@ -142,6 +168,25 @@ async function run() {
 
             const result = await bookingCollection.insertOne(booking);
             res.send({ success: true, result });
+        });
+
+
+        app.patch('/booking/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id;
+            const payment = req.body;
+            const filter = { _id: ObjectId(id) };
+            const updatedDoc = {
+                $set: {
+                    paid: true,
+                    transactionId: payment.transactionId,
+                }
+            }
+
+            const result = await paymentCollection.insertOne(payment);
+            const updateBooking = await bookingCollection.updateOne(filter, updatedDoc);
+            res.send(updatedDoc);
+
+
         });
 
 
@@ -165,6 +210,33 @@ async function run() {
             const result = await addProductCollection.deleteOne(filter);
             res.send(result);
         });
+
+
+
+        app.get('/addReview', async (req, res) => {
+            const addReviews = await addReviewCollection.find().toArray();
+            res.send(addReviews);
+        });
+
+
+
+        app.post('/addReview', async (req, res) => {
+            const review = req.body;
+            const result = await addReviewCollection.insertOne(review);
+            res.send(result);
+        });
+
+
+
+        app.post('/updateProfile', async (req, res) => {
+            const profile = req.body;
+            const result = await updateProfileCollection.insertOne(profile);
+            res.send(result);
+        });
+
+
+
+
 
 
     }
